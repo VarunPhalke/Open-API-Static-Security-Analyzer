@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>OpenAPI Security Analyzer</title>
+
+  <style>
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 0;
+    }
+
+    header {
+      background: linear-gradient(90deg, #1f2937, #111827);
+      color: white;
+      padding: 25px;
+      text-align: center;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 26px;
+    }
+
+    header p {
+      margin-top: 6px;
+      color: #cbd5e1;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 30px auto;
+      padding: 20px;
+    }
+
+    .card {
+      background: white;
+      padding: 22px;
+      border-radius: 10px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+      margin-bottom: 25px;
+    }
+
+    h2 {
+      margin-top: 0;
+      color: #111827;
+    }
+
+    textarea {
+      width: 100%;
+      height: 160px;
+      padding: 12px;
+      font-family: monospace;
+    }
+
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    button.secondary {
+      background: #6b7280;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    .summary {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+
+    .summary-box {
+      flex: 1;
+      min-width: 170px;
+      padding: 14px;
+      border-radius: 8px;
+      text-align: center;
+      color: white;
+      font-weight: bold;
+    }
+
+    .critical { background: #dc2626; }
+    .high { background: #ea580c; }
+    .medium { background: #ca8a04; }
+    .low { background: #16a34a; }
+    .score { background: #1f2937; }
+
+    .filters {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      margin-top: 15px;
+    }
+
+    .filters select,
+    .filters input {
+      padding: 8px;
+      font-size: 14px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    th, td {
+      border: 1px solid #e5e7eb;
+      padding: 10px;
+      font-size: 14px;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f1f5f9;
+    }
+
+    .sev-critical { color: #dc2626; font-weight: bold; }
+    .sev-high { color: #ea580c; font-weight: bold; }
+    .sev-medium { color: #ca8a04; font-weight: bold; }
+    .sev-low { color: #16a34a; font-weight: bold; }
+
+    .empty {
+      text-align: center;
+      color: #6b7280;
+      padding: 20px;
+    }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      color: #6b7280;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🔐 OpenAPI Security Analyzer</h1>
+  <p>Static Security Analysis for Swagger & OpenAPI Specs</p>
+</header>
+
+<div class="container">
+
+  <!-- INPUT -->
+  <div class="card">
+    <h2>📄 Analyze OpenAPI Spec</h2>
+
+    <form id="analyzeForm">
+      <p><b>Upload File</b></p>
+      <input type="file" name="file">
+
+      <p><b>OR Paste Spec</b></p>
+      <textarea name="pasted_spec" placeholder="Paste OpenAPI YAML or JSON here"></textarea>
+
+      <br><br>
+      <button type="submit">Analyze</button>
+    </form>
+  </div>
+
+  <!-- SUMMARY -->
+  <div class="card" id="summaryCard" style="display:none;">
+    <h2>📊 Security Summary</h2>
+    <div class="summary">
+      <div class="summary-box critical" id="criticalCount">Critical: 0</div>
+      <div class="summary-box high" id="highCount">High: 0</div>
+      <div class="summary-box medium" id="mediumCount">Medium: 0</div>
+      <div class="summary-box low" id="lowCount">Low: 0</div>
+      <div class="summary-box score" id="scoreBox">Score: 0</div>
+    </div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="card" id="filterCard" style="display:none;">
+    <h2>🔍 Filters</h2>
+
+    <div class="filters">
+      <select id="severityFilter">
+        <option value="All">All Severities</option>
+        <option value="Critical">Critical</option>
+        <option value="High">High</option>
+        <option value="Medium">Medium</option>
+        <option value="Low">Low</option>
+      </select>
+
+      <input type="text" id="ruleSearch" placeholder="Search by Rule ID (e.g. SEC001)">
+
+      <button class="secondary" id="clearFilters">Clear Filters</button>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="card" id="resultsCard" style="display:none;">
+    <h2>🧾 Findings</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Rule</th>
+          <th>Severity</th>
+          <th>Description</th>
+          <th>Location</th>
+          <th>Recommendation</th>
+        </tr>
+      </thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+
+    <div class="empty" id="emptyState" style="display:none;">
+      No issues match the selected filters.
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Internship Project – OpenAPI Static Security Analyzer
+</footer>
+
+<script>
+  const form = document.getElementById("analyzeForm");
+  const resultsBody = document.getElementById("resultsBody");
+  const severityFilter = document.getElementById("severityFilter");
+  const ruleSearch = document.getElementById("ruleSearch");
+  const emptyState = document.getElementById("emptyState");
+
+  let allIssues = [];
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const res = await fetch("http://localhost:3000/analyze", {
+      method: "POST",
+      body: new FormData(form)
+    });
+
+    const data = await res.json();
+    allIssues = data.issues;
+
+    document.getElementById("summaryCard").style.display = "block";
+    document.getElementById("filterCard").style.display = "block";
+    document.getElementById("resultsCard").style.display = "block";
+
+    document.getElementById("criticalCount").textContent = "Critical: " + data.summary.Critical;
+    document.getElementById("highCount").textContent = "High: " + data.summary.High;
+    document.getElementById("mediumCount").textContent = "Medium: " + data.summary.Medium;
+    document.getElementById("lowCount").textContent = "Low: " + data.summary.Low;
+    document.getElementById("scoreBox").textContent = "Score: " + data.security_score;
+
+    renderTable(allIssues);
+  });
+
+  function renderTable(issues) {
+    resultsBody.innerHTML = "";
+    emptyState.style.display = issues.length ? "none" : "block";
+
+    issues.forEach(issue => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${issue.rule_id}</td>
+        <td class="sev-${issue.severity.toLowerCase()}">${issue.severity}</td>
+        <td>${issue.description}</td>
+        <td>${issue.location}</td>
+        <td>${issue.recommendation}</td>
+      `;
+      resultsBody.appendChild(tr);
+    });
+  }
+
+  function applyFilters() {
+    const sev = severityFilter.value;
+    const search = ruleSearch.value.toUpperCase();
+
+    const filtered = allIssues.filter(issue => {
+      const matchSev = sev === "All" || issue.severity === sev;
+      const matchRule = issue.rule_id.includes(search);
+      return matchSev && matchRule;
+    });
+
+    renderTable(filtered);
+  }
+
+  severityFilter.addEventListener("change", applyFilters);
+  ruleSearch.addEventListener("input", applyFilters);
+
+  document.getElementById("clearFilters").addEventListener("click", () => {
+    severityFilter.value = "All";
+    ruleSearch.value = "";
+    renderTable(allIssues);
+  });
+</script>
+<footer>
+  <div class="footer-title">
+    OpenAPI Security Analyzer
+  </div>
+
+  <div>
+    Internship Project – Static API Security Analysis Tool
+  </div>
+
+  <div class="footer-meta">
+    <span>Built with Node.js & Express</span> |
+    <span>Supports OpenAPI 2.0 & 3.x</span> |
+    <span>© 2026</span>
+  </div>
+</footer>
+
+</body>
+</html>
+  
